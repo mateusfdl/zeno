@@ -30,7 +30,7 @@ func main() {
 	case "view":
 		commander = cmd.NewViewCommand()
 	case "version", "--version", "-v":
-		fmt.Printf("mygobenchtool version %s\n", version)
+		fmt.Printf("Zeno version %s\n", version)
 		os.Exit(0)
 	case "help", "--help", "-h":
 		printUsage()
@@ -48,12 +48,12 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Printf(`mygobenchtool - Go Benchmark Data Analysis Tool v%s
+	fmt.Printf(`Zeno - Go Benchmark Data Analysis Tool v%s
 
 A tool for parsing, storing, and analyzing Go benchmark results.
 
 USAGE:
-    mygobenchtool <command> [options]
+    Zeno <command> [options]
 
 COMMANDS:
     parse      Parse benchmark output from stdin and output JSON
@@ -65,32 +65,32 @@ COMMANDS:
 
 EXAMPLES:
     # Parse benchmark output
-    go test -bench=. -benchmem | mygobenchtool parse -o results.json
+    go test -bench=. -benchmem | Zeno parse -o results.json
 
     # Parse with metadata
-    go test -bench=. | mygobenchtool parse --version=v1.0.0 --tags=ci -o results.json
+    go test -bench=. | Zeno parse --version=v1.0.0 --tags=ci -o results.json
 
     # Merge benchmark files
-    mygobenchtool merge -o combined.json file1.json file2.json file3.json
+    Zeno merge -o combined.json file1.json file2.json file3.json
 
     # Compare benchmarks
-    mygobenchtool compare baseline.json current.json
+    Zeno compare baseline.json current.json
 
     # Compare with custom threshold
-    mygobenchtool compare --threshold=2.5 before.json after.json
+    Zeno compare --threshold=2.5 before.json after.json
 
     # View in TUI
-    mygobenchtool view -f results.json
+    Zeno view -f results.json
 
     # Generate HTML web report
-    mygobenchtool view --web -f results.json
+    Zeno view --web -f results.json
 
     # Generate HTML comparison report
-    mygobenchtool view --web -f current.json --compare baseline.json -o compare.html
+    Zeno view --web -f current.json --compare baseline.json -o compare.html
 
     # Pipe from go test to HTML
-    go test -bench=. -benchmem | mygobenchtool view --web
+    go test -bench=. -benchmem | Zeno view --web
 
-Use "mygobenchtool <command> --help" for more information about a command.
+Use "Zeno <command> --help" for more information about a command.
 `, version)
 }

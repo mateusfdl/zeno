@@ -1,0 +1,254 @@
+.Dd 2025-01-13
+.Dt MYGOBENCHTOOL 1
+.Os
+.Sh NAME
+.Nm Zeno
+.Nd Go benchmark data analysis tool
+.Sh SYNOPSIS
+.Nm
+.Cm parse
+.Op Fl -output Ar file
+.Op Fl -version Ar string
+.Op Fl -tags Ar string
+.Op Fl -append
+.Nm
+.Cm merge
+.Op Fl -output Ar file
+.Op Fl -sort-asc | -sort-desc | -unique
+.Ar file1.json Ar file2.json ...
+.Nm
+.Cm compare
+.Op Fl -threshold Ar float
+.Op Fl -format Ar text | json
+.Ar baseline.json Ar current.json
+.Nm
+.Cm view
+.Op Fl -file Ar file
+.Op Fl -compare Ar file
+.Op Fl -threshold Ar float
+.Op Fl -web
+.Op Fl -output Ar file
+.Nm
+.Cm version | Fl -version | Fl v
+.Nm
+.Cm help | Fl -help | Fl h
+.Sh DESCRIPTION
+.Nm Zeno
+is a Go-based benchmark data analysis tool that combines the best features from
+gobenchdata and vizb, focusing on parsing, storing, and analyzing Go benchmark results.
+.Pp
+It supports parsing raw benchmark output, merging multiple benchmark files, comparing
+runs to detect regressions, and viewing results in either an interactive TUI or as
+static HTML reports.
+.Sh COMMANDS
+.Bl -tag -width Ds
+.It Cm parse
+Parse benchmark output from stdin and save as JSON.
+.It Cm merge
+Merge multiple benchmark JSON files into one.
+.It Cm compare
+Compare two benchmark runs and detect performance regressions.
+.It Cm view
+View benchmark results in an interactive TUI or generate an HTML web report.
+.El
+.Sh OPTIONS
+.Bl -tag -width Ds
+.It Fl -output Ar file , Fl o Ar file
+Output file path (default: stdout or specific default per command).
+.It Fl -version Ar string , Fl v Ar string
+Version tag for the benchmark run.
+.It Fl -tags Ar string
+Comma-separated tags for the benchmark run.
+.It Fl -append
+Append to existing file instead of overwriting.
+.It Fl -sort-asc
+Sort runs by date ascending.
+.It Fl -sort-desc
+Sort runs by date descending (default).
+.It Fl -unique
+Remove duplicate runs when merging.
+.It Fl -threshold Ar float , Fl t Ar float
+Regression threshold percentage (default: 5.0).
+.It Fl -format Ar text | json
+Output format for compare command (default: text).
+.It Fl -file Ar file , Fl f Ar file
+JSON file to view (default: stdin).
+.It Fl -compare Ar file , Fl c Ar file
+Compare with this file (enables comparison mode).
+.It Fl -web , Fl w
+Generate HTML report instead of TUI.
+.El
+.Sh EXAMPLES
+Parse benchmark output:
+.Dl # go test -bench=. -benchmem | Zeno parse -o results.json
+.Pp
+Parse with metadata:
+.Dl # go test -bench=. | Zeno parse --version=v1.0.0 --tags=ci -o results.json
+.Pp
+Merge benchmark files:
+.Dl # Zeno merge -o combined.json file1.json file2.json file3.json
+.Pp
+Compare benchmarks:
+.Dl # Zeno compare baseline.json current.json
+.Pp
+Compare with custom threshold:
+.Dl # Zeno compare --threshold=2.5 before.json after.json
+.Pp
+View in TUI:
+.Dl # Zeno view -f results.json
+.Pp
+Generate HTML web report:
+.Dl # Zeno view --web -f results.json
+.Pp
+Generate HTML comparison report:
+.Dl # Zeno view --web -f current.json --compare baseline.json -o compare.html
+.Pp
+Pipe from go test to HTML:
+.Dl # go test -bench=. -benchmem | Zeno view --web
+.Sh JSON FORMAT
+Benchmark data is stored as a JSON array of Run objects:
+.Bd -literal -offset 2n
+[
+  {
+    "version": "v1.0.0",
+    "date": 1609459200,
+    "tags": ["ci"],
+    "suites": [
+      {
+        "go": "go1.23",
+        "goos": "linux",
+        "goarch": "amd64",
+        "pkg": "github.com/example/mypackage",
+        "benchmarks": [
+          {
+            "name": "BenchmarkFunction",
+            "runs": 1000000,
+            "nsPerOp": 120.5,
+            "mem": {
+              "bytesPerOp": 16.0,
+              "allocsPerOp": 1.0,
+              "mbPerSec": 12.5
+            },
+            "custom": {}
+          }
+        ]
+      }
+    ]
+  }
+]
+.Ed
+.Sh DATA STRUCTURES
+.Ss Run
+A single benchmark run with metadata.
+.Bl -tag -width Ds -compact
+.It version
+Optional version tag.
+.It date
+Unix timestamp of the run.
+.It tags
+Optional list of tags.
+.It suites
+List of benchmark suites.
+.El
+.Ss Suite
+Collection of benchmarks for a specific package.
+.Bl -tag -width Ds -compact
+.It go
+Go version.
+.It goos
+Operating system.
+.It goarch
+Architecture.
+.It pkg
+Package path.
+.It benchmarks
+List of benchmarks.
+.El
+.Ss Benchmark
+Individual benchmark measurement.
+.Bl -tag -width Ds -compact
+.It name
+Benchmark name.
+.It runs
+Number of iterations.
+.It nsPerOp
+Nanoseconds per operation.
+.It mem
+Memory allocation metrics (optional).
+.It custom
+Custom metrics (optional).
+.El
+.Ss Mem
+Memory allocation metrics.
+.Bl -tag -width Ds -compact
+.It bytesPerOp
+Bytes allocated per operation.
+.It allocsPerOp
+Number of allocations per operation.
+.It mbPerSec
+Megabytes processed per second.
+.El
+.Sh TUI CONTROLS
+When viewing in TUI mode:
+.Bl -tag -width Ds -compact
+.It q , ctrl+c
+Quit the application.
+.It h , ?
+Toggle help display.
+.It 1 , 2 , 3
+Switch between tabs (Run, Compare, All Runs).
+.El
+.Sh WEB REPORT FEATURES
+The HTML web report includes:
+.Bl -bullet -compact
+.It
+Summary cards showing total benchmarks, regressions, and improvements.
+.It
+Interactive bar charts using Chart.js for time and memory changes.
+.It
+Detailed comparison tables with color-coded changes.
+.It
+Responsive design for mobile and desktop.
+.It
+Dark theme optimized for readability.
+.El
+.Sh CI INTEGRATION
+Example GitHub Actions workflow:
+.Bd -literal -offset 2n
+# .github/workflows/bench.yml
+name: Benchmark
+on: [push, pull_request]
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        with:
+          go-version: '1.23'
+      - name: Run benchmarks
+        run: |
+          go test -bench=. -benchmem | \\
+            Zeno parse --version=${{ github.sha }} --tags=ci -o bench-new.json
+      - name: Compare with baseline
+        run: |
+          Zeno compare bench-baseline.json bench-new.json
+.Ed
+.Sh EXIT STATUS
+.Ex -std
+The
+.Nm
+utility exits 0 on success, and >0 if an error occurs.
+.Sh SEE ALSO
+.Xr go-test 1 ,
+.Xr benchmark 1
+.Sh HISTORY
+.Nm
+was created to combine the best features of gobenchdata and vizb, providing a
+simple yet powerful tool for Go benchmark analysis with both TUI and web
+visualization capabilities.
+.Sh AUTHORS
+.Mt matheus.limastack@gmail.com
+Matheus
+.Sh BUGS
+GitHub issues: https://github.com/mateusfdl/zeno/issues
