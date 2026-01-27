@@ -48,12 +48,12 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Printf(`Zeno - Go Benchmark Data Analysis Tool v%s
+	fmt.Printf(`Zeno - Go Bench Analysis Tool v%s
 
 A tool for parsing, storing, and analyzing Go benchmark results.
 
 USAGE:
-    Zeno <command> [options]
+    zeno <command> [options]
 
 COMMANDS:
     parse      Parse benchmark output from stdin and output JSON
@@ -65,32 +65,32 @@ COMMANDS:
 
 EXAMPLES:
     # Parse benchmark output
-    go test -bench=. -benchmem | Zeno parse -o results.json
+    go test -bench=. -benchmem | zeno parse -o results.json
 
     # Parse with metadata
-    go test -bench=. | Zeno parse --version=v1.0.0 --tags=ci -o results.json
+    go test -bench=. | zeno parse --version=v1.0.0 --tags=ci -o results.json
 
     # Merge benchmark files
-    Zeno merge -o combined.json file1.json file2.json file3.json
+    zeno merge -o combined.json file1.json file2.json file3.json
 
     # Compare benchmarks
-    Zeno compare baseline.json current.json
+    zeno compare baseline.json current.json
 
     # Compare with custom threshold
-    Zeno compare --threshold=2.5 before.json after.json
+    zeno compare --threshold=2.5 before.json after.json
 
     # View in TUI
-    Zeno view -f results.json
+    zeno view -f results.json
 
     # Generate HTML web report
-    Zeno view --web -f results.json
+    zeno view --web -f results.json
 
     # Generate HTML comparison report
-    Zeno view --web -f current.json --compare baseline.json -o compare.html
+    zeno view --web -f current.json --compare baseline.json -o compare.html
 
     # Pipe from go test to HTML
     go test -bench=. -benchmem | Zeno view --web
 
-Use "Zeno <command> --help" for more information about a command.
+Use "zeno <command> --help" for more information about a command.
 `, version)
 }

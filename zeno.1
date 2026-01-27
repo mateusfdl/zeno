@@ -1,9 +1,9 @@
 .Dd 2025-01-13
-.Dt MYGOBENCHTOOL 1
+.Dt zeno 1
 .Os
 .Sh NAME
 .Nm Zeno
-.Nd Go benchmark data analysis tool
+.Nd Go benchmark analysis tool
 .Sh SYNOPSIS
 .Nm
 .Cm parse
@@ -80,31 +80,31 @@ Generate HTML report instead of TUI.
 .El
 .Sh EXAMPLES
 Parse benchmark output:
-.Dl # go test -bench=. -benchmem | Zeno parse -o results.json
+.Dl # go test -bench=. -benchmem | zeno parse -o results.json
 .Pp
 Parse with metadata:
-.Dl # go test -bench=. | Zeno parse --version=v1.0.0 --tags=ci -o results.json
+.Dl # go test -bench=. | zeno parse --version=v1.0.0 --tags=ci -o results.json
 .Pp
 Merge benchmark files:
-.Dl # Zeno merge -o combined.json file1.json file2.json file3.json
+.Dl # zeno merge -o combined.json file1.json file2.json file3.json
 .Pp
 Compare benchmarks:
-.Dl # Zeno compare baseline.json current.json
+.Dl # zeno compare baseline.json current.json
 .Pp
 Compare with custom threshold:
-.Dl # Zeno compare --threshold=2.5 before.json after.json
+.Dl # zeno compare --threshold=2.5 before.json after.json
 .Pp
 View in TUI:
-.Dl # Zeno view -f results.json
+.Dl # zeno view -f results.json
 .Pp
 Generate HTML web report:
-.Dl # Zeno view --web -f results.json
+.Dl # zeno view --web -f results.json
 .Pp
 Generate HTML comparison report:
-.Dl # Zeno view --web -f current.json --compare baseline.json -o compare.html
+.Dl # zeno view --web -f current.json --compare baseline.json -o compare.html
 .Pp
 Pipe from go test to HTML:
-.Dl # go test -bench=. -benchmem | Zeno view --web
+.Dl # go test -bench=. -benchmem | zeno view --web
 .Sh JSON FORMAT
 Benchmark data is stored as a JSON array of Run objects:
 .Bd -literal -offset 2n
@@ -197,6 +197,10 @@ Quit the application.
 Toggle help display.
 .It 1 , 2 , 3
 Switch between tabs (Run, Compare, All Runs).
+.It s
+Sort results by name
+.It S
+Sort results by bench values
 .El
 .Sh WEB REPORT FEATURES
 The HTML web report includes:
@@ -229,10 +233,10 @@ jobs:
       - name: Run benchmarks
         run: |
           go test -bench=. -benchmem | \\
-            Zeno parse --version=${{ github.sha }} --tags=ci -o bench-new.json
+            zeno parse --version=${{ github.sha }} --tags=ci -o bench-new.json
       - name: Compare with baseline
         run: |
-          Zeno compare bench-baseline.json bench-new.json
+          zeno compare bench-baseline.json bench-new.json
 .Ed
 .Sh EXIT STATUS
 .Ex -std
