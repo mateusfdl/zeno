@@ -281,11 +281,8 @@ func (g *Generator) generateRunTab(run bench.Run, index int, isActive bool) stri
 }
 
 func (g *Generator) generateSuiteCard(suite bench.Suite) string {
-	var benchmarks []string
-
-	for _, b := range suite.Benchmarks {
-		benchmarks = append(benchmarks, g.generateBenchmarkRow(b))
-	}
+	timeChart := g.generateTimeBarChart(suite)
+	memChart := g.generateMemBarChart(suite)
 
 	return fmt.Sprintf(`<div class="card">
     <div class="card-header">
@@ -296,11 +293,151 @@ func (g *Generator) generateSuiteCard(suite bench.Suite) string {
         </div>
     </div>
     <div class="card-body">
-        <div class="benchmark-list">
+        <div class="chart-section">
+            <h4>Execution Time (ns/op)</h4>
+            <div class="bar-chart">
 %s
+            </div>
+        </div>
+        <div class="chart-section">
+            <h4>Memory Usage (B/op)</h4>
+            <div class="bar-chart">
+%s
+            </div>
         </div>
     </div>
-</div>`, suite.Pkg, suite.Go, suite.Goos, suite.Goarch, joinStrings(benchmarks, "\n"))
+</div>`, suite.Pkg, suite.Go, suite.Goos, suite.Goarch, timeChart, memChart)
+}
+
+func (g *Generator) generateTimeBarChart(suite bench.Suite) string {
+	maxVal := 0.0
+	for _, b := range suite.Benchmarks {
+		if b.NsPerOp > maxVal {
+			maxVal = b.NsPerOp
+		}
+	}
+	if maxVal == 0 {
+		return "<p class='no-data'>No timing data available</p>"
+	}
+
+	greenCount, yellowCount, redCount := 0, 0, 0
+
+	var bars []string
+	for _, b := range suite.Benchmarks {
+		if b.NsPerOp <= 0 {
+			continue
+		}
+
+		pct := (b.NsPerOp / maxVal) * 100
+		if pct < 5 {
+			pct = 5 // Minimum visibility
+		}
+		color, shade := g.getPerformanceColor(b.NsPerOp, maxVal, &greenCount, &yellowCount, &redCount)
+
+		bars = append(bars, fmt.Sprintf(`<div class="bar-row">
+            <div class="bar-name">%s</div>
+            <div class="bar-track">
+                <div class="bar %s" style="width: %.1f%%; %s"></div>
+            </div>
+            <div class="bar-value">%s</div>
+        </div>`, escapeHTML(b.Name), color, pct, shade, formatValue(b.NsPerOp)))
+	}
+
+	return joinStrings(bars, "\n")
+}
+
+func (g *Generator) generateMemBarChart(suite bench.Suite) string {
+	maxVal := 0.0
+	for _, b := range suite.Benchmarks {
+		if b.Mem != nil && b.Mem.BytesPerOp > maxVal {
+			maxVal = b.Mem.BytesPerOp
+		}
+	}
+	if maxVal == 0 {
+		return "<p class='no-data'>No memory data available</p>"
+	}
+
+	greenCount, yellowCount, redCount := 0, 0, 0
+
+	var bars []string
+	for _, b := range suite.Benchmarks {
+		if b.Mem == nil || b.Mem.BytesPerOp <= 0 {
+			continue
+		}
+
+		pct := (b.Mem.BytesPerOp / maxVal) * 100
+		if pct < 5 {
+			pct = 5
+		}
+		color, shade := g.getPerformanceColor(b.Mem.BytesPerOp, maxVal, &greenCount, &yellowCount, &redCount)
+
+		bars = append(bars, fmt.Sprintf(`<div class="bar-row">
+            <div class="bar-name">%s</div>
+            <div class="bar-track">
+                <div class="bar %s" style="width: %.1f%%; %s"></div>
+            </div>
+            <div class="bar-value">%s</div>
+        </div>`, escapeHTML(b.Name), color, pct, shade, formatBytes(b.Mem.BytesPerOp)))
+	}
+
+	return joinStrings(bars, "\n")
+}
+
+func (g *Generator) getPerformanceColor(value, maxVal float64, greenCount, yellowCount, redCount *int) (string, string) {
+	ratio := value / maxVal
+
+	var color string
+	var shadeIdx int
+
+	if ratio <= 0.5 {
+		color = "bar-fast"
+		shadeIdx = *greenCount
+		*greenCount++
+	} else if ratio <= 0.8 {
+		color = "bar-medium"
+		shadeIdx = *yellowCount
+		*yellowCount++
+	} else {
+		color = "bar-slow"
+		shadeIdx = *redCount
+		*redCount++
+	}
+
+	lightenPct := shadeIdx * 12
+	if lightenPct > 48 {
+		lightenPct = 48
+	}
+
+	shade := ""
+	if lightenPct > 0 {
+		shade = fmt.Sprintf("filter: brightness(%d%%);", 100+lightenPct)
+	}
+
+	return color, shade
+}
+
+func formatValue(v float64) string {
+	if v >= 1000000 {
+		return fmt.Sprintf("%.1fM", v/1000000)
+	} else if v >= 1000 {
+		return fmt.Sprintf("%.1fK", v/1000)
+	} else if v >= 100 {
+		return fmt.Sprintf("%.0f", v)
+	} else if v >= 10 {
+		return fmt.Sprintf("%.1f", v)
+	}
+	return fmt.Sprintf("%.2f", v)
+}
+
+func formatBytes(v float64) string {
+	if v >= 1073741824 {
+		return fmt.Sprintf("%.1f GB", v/1073741824)
+	} else if v >= 1048576 {
+		return fmt.Sprintf("%.1f MB", v/1048576)
+	} else if v >= 1024 {
+		return fmt.Sprintf("%.1f KB", v/1024)
+	}
+	return fmt.Sprintf("%.0f B", v)
 }
 
 func (g *Generator) generateBenchmarkRow(b bench.Benchmark) string {
@@ -478,165 +615,191 @@ func (g *Generator) getCSS() string {
 }
 
 :root {
-    --bg-primary: #0f172a;
-    --bg-secondary: #1e293b;
-    --bg-card: #334155;
-    --text-primary: #f1f5f9;
-    --text-secondary: #94a3b8;
-    --text-muted: #64748b;
-    --border: #475569;
-    --primary: #3b82f6;
-    --success: #22c55e;
-    --danger: #ef4444;
-    --warning: #f59e0b;
-    --neutral: #64748b;
+    --bg-primary: #1a1a2e;
+    --bg-secondary: #16213e;
+    --bg-card: #1f2940;
+    --bg-bar-track: #0d1321;
+    --text-primary: #e8e8e8;
+    --text-secondary: #a0aec0;
+    --text-muted: #718096;
+    --border: #2d3748;
+    --gopher-cyan: #00ADD8;
+    --gopher-blue: #5DC9E2;
+    --gopher-dark: #007d9c;
+    --fast: #00ADD8;
+    --medium: #f6ad55;
+    --slow: #fc8181;
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
     background: var(--bg-primary);
     color: var(--text-primary);
-    line-height: 1.6;
+    line-height: 1.5;
     min-height: 100vh;
 }
 
 .container {
-    max-width: 1200px;
+    max-width: 1600px;
     margin: 0 auto;
-    padding: 2rem;
+    padding: 1.5rem 2rem;
 }
 
 header {
-    text-align: center;
-    margin-bottom: 2rem;
-    padding-bottom: 2rem;
-    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid var(--gopher-cyan);
 }
 
 header h1 {
-    font-size: 2rem;
-    margin-bottom: 0.5rem;
-    color: var(--primary);
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--gopher-cyan);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+header h1::before {
+    content: ">";
+    color: var(--gopher-blue);
 }
 
 .timestamp {
     color: var(--text-muted);
-    font-size: 0.875rem;
+    font-size: 0.75rem;
 }
 
 section {
-    margin-bottom: 2rem;
+    margin-bottom: 1.5rem;
 }
 
 h2 {
-    font-size: 1.5rem;
-    margin-bottom: 1rem;
-    color: var(--text-primary);
+    font-size: 1rem;
+    margin-bottom: 0.75rem;
+    color: var(--gopher-cyan);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 600;
 }
 
 h3 {
-    font-size: 1.125rem;
-    color: var(--text-secondary);
+    font-size: 0.95rem;
+    color: var(--text-primary);
     margin-bottom: 0.5rem;
+    font-weight: 500;
 }
 
 /* Summary */
 .summary {
     background: var(--bg-secondary);
-    border-radius: 8px;
-    padding: 1.5rem;
+    border-radius: 6px;
+    padding: 1rem;
+    border: 1px solid var(--border);
 }
 
 .metadata {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2rem;
 }
 
 .metadata-item {
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
 }
 
 .metadata-label {
     color: var(--text-muted);
-    font-size: 0.875rem;
+    font-size: 0.75rem;
 }
 
 .metadata-value {
-    color: var(--text-primary);
+    color: var(--gopher-cyan);
     font-weight: 600;
+    font-size: 0.85rem;
 }
 
 /* Stats Cards */
 .stats {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    display: flex;
     gap: 1rem;
+    flex-wrap: wrap;
 }
 
 .stat-card {
     background: var(--bg-card);
-    border-radius: 8px;
-    padding: 1.5rem;
+    border-radius: 6px;
+    padding: 1rem 1.5rem;
     text-align: center;
-    border: 2px solid transparent;
+    border: 1px solid var(--border);
+    min-width: 120px;
 }
 
 .stat-card.stat-danger {
-    border-color: var(--danger);
+    border-color: var(--slow);
 }
 
 .stat-card.stat-success {
-    border-color: var(--success);
+    border-color: var(--gopher-cyan);
 }
 
 .stat-value {
-    font-size: 2rem;
+    font-size: 1.5rem;
     font-weight: 700;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.25rem;
+    color: var(--text-primary);
 }
 
 .stat-label {
-    color: var(--text-secondary);
-    font-size: 0.875rem;
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
 /* Tabs */
 .tabs-section {
     background: var(--bg-secondary);
-    border-radius: 8px;
-    overflow: hidden;
+    border-radius: 6px;
+    border: 1px solid var(--border);
 }
 
 .tabs {
     display: flex;
     gap: 0;
     border-bottom: 1px solid var(--border);
+    background: var(--bg-primary);
 }
 
 .tab-btn {
     background: transparent;
     border: none;
-    color: var(--text-secondary);
-    padding: 1rem 1.5rem;
+    color: var(--text-muted);
+    padding: 0.6rem 1rem;
     cursor: pointer;
     border-bottom: 2px solid transparent;
     transition: all 0.2s;
+    font-family: inherit;
+    font-size: 0.8rem;
 }
 
 .tab-btn:hover {
     color: var(--text-primary);
-    background: var(--bg-card);
 }
 
 .tab-btn.active {
-    color: var(--primary);
-    border-bottom-color: var(--primary);
+    color: var(--gopher-cyan);
+    border-bottom-color: var(--gopher-cyan);
+    background: var(--bg-secondary);
 }
 
 .tab-content {
-    padding: 1.5rem;
+    padding: 1rem;
 }
 
 .tab-pane {
@@ -650,22 +813,25 @@ h3 {
 /* Cards */
 .card {
     background: var(--bg-card);
-    border-radius: 8px;
-    margin-bottom: 1rem;
-    overflow: hidden;
+    border-radius: 6px;
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--border);
 }
 
 .card-header {
-    padding: 1rem 1.5rem;
+    padding: 0.75rem 1rem;
     background: var(--bg-secondary);
     display: flex;
     justify-content: space-between;
     align-items: center;
+    border-bottom: 1px solid var(--border);
 }
 
 .card-header h3 {
     margin: 0;
-    color: var(--text-primary);
+    color: var(--gopher-cyan);
+    font-size: 0.9rem;
+    font-weight: 500;
 }
 
 .suite-info {
@@ -674,16 +840,16 @@ h3 {
 }
 
 .badge {
-    background: var(--primary);
+    background: var(--gopher-dark);
     color: white;
-    padding: 0.25rem 0.75rem;
-    border-radius: 4px;
-    font-size: 0.75rem;
-    font-weight: 600;
+    padding: 0.2rem 0.6rem;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    font-weight: 500;
 }
 
 .card-body {
-    padding: 1.5rem;
+    padding: 1rem;
 }
 
 /* Benchmark List */
@@ -833,6 +999,91 @@ td.text-right {
 
 .empty-state p {
     color: var(--text-muted);
+}
+
+/* Bar Chart */
+.chart-section {
+    margin-bottom: 1.5rem;
+}
+
+.chart-section:last-child {
+    margin-bottom: 0;
+}
+
+.chart-section h4 {
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    margin-bottom: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 600;
+}
+
+.bar-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.bar-row {
+    display: grid;
+    grid-template-columns: minmax(200px, 300px) 1fr 80px;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.25rem 0;
+}
+
+.bar-row:hover {
+    background: rgba(0, 173, 216, 0.05);
+}
+
+.bar-name {
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 400;
+}
+
+.bar-track {
+    height: 22px;
+    background: var(--bg-bar-track);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.bar {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s ease;
+    min-width: 4px;
+}
+
+.bar-fast {
+    background: linear-gradient(90deg, var(--gopher-cyan) 0%, var(--gopher-blue) 100%);
+}
+
+.bar-medium {
+    background: linear-gradient(90deg, #f6ad55 0%, #ed8936 100%);
+}
+
+.bar-slow {
+    background: linear-gradient(90deg, #fc8181 0%, #f56565 100%);
+}
+
+.bar-value {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.no-data {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    padding: 0.5rem 0;
 }
 
 /* Responsive */
