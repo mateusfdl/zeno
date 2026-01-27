@@ -71,7 +71,7 @@ func (vc *ViewCommand) runComparison() error {
 	}
 
 	model := tui.NewComparisonModel(results, vc.threshold)
-	p := tea.NewProgram(model, tea.WithAltScreen())
+	p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 	_, err = p.Run()
 	return err
@@ -88,7 +88,7 @@ func (vc *ViewCommand) runSingleFile() error {
 	}
 
 	model := tui.NewModel(runs, vc.threshold)
-	p := tea.NewProgram(model, tea.WithAltScreen())
+	p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 	_, err = p.Run()
 	return err
@@ -105,7 +105,7 @@ func (vc *ViewCommand) runStdin() error {
 	if err == nil && len(runs) > 0 {
 
 		model := tui.NewModel(runs, vc.threshold)
-		p := tea.NewProgram(model, tea.WithAltScreen())
+		p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
 		_, err = p.Run()
 		return err
 	}
@@ -118,7 +118,7 @@ func (vc *ViewCommand) runStdin() error {
 
 	run := bench.CreateRun(suites, "", 0, nil)
 	model := tui.NewModel([]bench.Run{run}, vc.threshold)
-	p := tea.NewProgram(model, tea.WithAltScreen())
+	p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 	_, err = p.Run()
 	return err

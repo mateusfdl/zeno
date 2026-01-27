@@ -3,10 +3,12 @@ package web
 import (
 	_ "embed"
 	"fmt"
+	"html"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/mateusfdl/zeno/bench"
@@ -403,10 +405,7 @@ func (g *Generator) getPerformanceColor(value, maxVal float64, greenCount, yello
 		*redCount++
 	}
 
-	lightenPct := shadeIdx * 12
-	if lightenPct > 48 {
-		lightenPct = 48
-	}
+	lightenPct := min(shadeIdx*12, 48)
 
 	shade := ""
 	if lightenPct > 0 {
@@ -585,10 +584,10 @@ func (g *Generator) generateComparisonTable() string {
                     <th>Benchmark</th>
                     <th class="text-right">Old (ns/op)</th>
                     <th class="text-right">New (ns/op)</th>
-                    <th class="text-right">Time Δ%</th>
+                    <th class="text-right">Time Δ%%</th>
                     <th class="text-right">Old (B/op)</th>
                     <th class="text-right">New (B/op)</th>
-                    <th class="text-right">Mem Δ%</th>
+                    <th class="text-right">Mem Δ%%</th>
                 </tr>
             </thead>
             <tbody>
@@ -1232,14 +1231,7 @@ function createMemChart(data) {
 }
 
 func joinStrings(strs []string, sep string) string {
-	if len(strs) == 0 {
-		return ""
-	}
-	result := strs[0]
-	for i := 1; i < len(strs); i++ {
-		result += sep + strs[i]
-	}
-	return result
+	return strings.Join(strs, sep)
 }
 
 func joinSections(sections ...string) string {
@@ -1256,46 +1248,19 @@ func formatNumber(n int64) string {
 }
 
 func escapeHTML(s string) string {
-	s = replaceAll(s, "&", "&amp;")
-	s = replaceAll(s, "<", "&lt;")
-	s = replaceAll(s, ">", "&gt;")
-	s = replaceAll(s, "\"", "&quot;")
-	s = replaceAll(s, "'", "&#39;")
-	return s
+	return html.EscapeString(s)
 }
 
 func escapeJS(s string) string {
-	s = replaceAll(s, "\\", "\\\\")
-	s = replaceAll(s, "'", "\\'")
-	s = replaceAll(s, "\"", "\\\"")
-	s = replaceAll(s, "\n", "\\n")
-	s = replaceAll(s, "\r", "\\r")
-	s = replaceAll(s, "\t", "\\t")
+	s = strings.ReplaceAll(s, "\\", "\\\\")
+	s = strings.ReplaceAll(s, "'", "\\'")
+	s = strings.ReplaceAll(s, "\"", "\\\"")
+	s = strings.ReplaceAll(s, "\n", "\\n")
+	s = strings.ReplaceAll(s, "\r", "\\r")
+	s = strings.ReplaceAll(s, "\t", "\\t")
 	return s
 }
 
-func replaceAll(s, old, new string) string {
-	result := ""
-	for {
-		idx := indexOf(s, old)
-		if idx == -1 {
-			result += s
-			break
-		}
-		result += s[:idx] + new
-		s = s[idx+len(old):]
-	}
-	return result
-}
-
-func indexOf(s, substr string) int {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
-	}
-	return -1
-}
 
 func getClassForChange(pct, threshold float64) string {
 	if pct > threshold {
