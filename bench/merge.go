@@ -2,6 +2,7 @@ package bench
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 )
 
@@ -28,15 +29,11 @@ func MergeRunsFromFiles(paths ...string) ([]Run, error) {
 }
 
 func SortByDate(runs []Run) {
-	sort.Slice(runs, func(i, j int) bool {
-		return runs[i].Date < runs[j].Date
-	})
+	sort.Slice(runs, func(i, j int) bool { return runs[i].Date < runs[j].Date })
 }
 
 func SortByDateDescending(runs []Run) {
-	sort.Slice(runs, func(i, j int) bool {
-		return runs[i].Date > runs[j].Date
-	})
+	sort.Slice(runs, func(i, j int) bool { return runs[i].Date > runs[j].Date })
 }
 
 func DeduplicateRuns(runs []Run) []Run {
@@ -56,14 +53,14 @@ func DeduplicateRuns(runs []Run) []Run {
 
 func FilterByTag(runs []Run, tag string) []Run {
 	var result []Run
+
 	for _, run := range runs {
-		for _, t := range run.Tags {
-			if t == tag {
-				result = append(result, run)
-				break
-			}
+		if slices.Contains(run.Tags, tag) {
+			result = append(result, run)
+			break
 		}
 	}
+
 	return result
 }
 

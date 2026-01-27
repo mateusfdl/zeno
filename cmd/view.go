@@ -1,12 +1,13 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 
-	"github.com/charmbracelet/bubbletea"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/mateusfdl/zeno/bench"
 	tui "github.com/mateusfdl/zeno/views/terminal"
 	"github.com/mateusfdl/zeno/views/web"
@@ -52,26 +53,22 @@ func (vc *ViewCommand) Run(args []string) error {
 	}
 
 	if vc.compare != "" {
-
 		return vc.runComparison()
 	} else if vc.filePath != "" {
-
 		return vc.runSingleFile()
 	} else {
-
 		return vc.runStdin()
 	}
 }
 
 func (vc *ViewCommand) runComparison() error {
-
 	results, err := bench.CompareTwoFiles(vc.filePath, vc.compare)
 	if err != nil {
 		return fmt.Errorf("error comparing files: %w", err)
 	}
 
 	model := tui.NewComparisonModel(results, vc.threshold)
-	p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	p := runTea(model)
 
 	_, err = p.Run()
 	return err
@@ -88,13 +85,18 @@ func (vc *ViewCommand) runSingleFile() error {
 	}
 
 	model := tui.NewModel(runs, vc.threshold)
-	p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	p := runTea(model)
 
 	_, err = p.Run()
 	return err
 }
 
 func (vc *ViewCommand) runStdin() error {
+	stat, _ := os.Stdin.Stat()
+
+	if stat.Mode()&os.ModeCharDevice == 0 {
+		return vc.runStreamingStdin()
+	}
 
 	data, err := io.ReadAll(os.Stdin)
 	if err != nil {
@@ -103,9 +105,8 @@ func (vc *ViewCommand) runStdin() error {
 
 	runs, err := bench.DecodeRuns(strings.NewReader(string(data)))
 	if err == nil && len(runs) > 0 {
-
 		model := tui.NewModel(runs, vc.threshold)
-		p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
+		p := runTea(model)
 		_, err = p.Run()
 		return err
 	}
@@ -118,10 +119,30 @@ func (vc *ViewCommand) runStdin() error {
 
 	run := bench.CreateRun(suites, "", 0, nil)
 	model := tui.NewModel([]bench.Run{run}, vc.threshold)
-	p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	p := runTea(model)
 
 	_, err = p.Run()
 	return err
+}
+
+func (vc *ViewCommand) runStreamingStdin() error {
+	model := tui.NewStreamingModel(vc.threshold)
+	p := runTea(model)
+
+	go func() {
+		scanner := bufio.NewScanner(os.Stdin)
+		for scanner.Scan() {
+			p.Send(tui.BenchmarkLineMsg{Line: scanner.Text()})
+		}
+		p.Send(tui.StreamDoneMsg{Err: scanner.Err()})
+	}()
+
+	_, err := p.Run()
+	return err
+}
+
+func runTea(model tui.Model) *tea.Program {
+	return tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
 }
 
 func (vc *ViewCommand) runWebComparison() error {

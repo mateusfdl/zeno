@@ -48,12 +48,12 @@ func (g *Generator) GenerateToFile(outputPath string) error {
 
 	dir := filepath.Dir(outputPath)
 	if dir != "" && dir != "." {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return fmt.Errorf("error creating directory: %w", err)
 		}
 	}
 
-	if err := os.WriteFile(outputPath, []byte(html), 0644); err != nil {
+	if err := os.WriteFile(outputPath, []byte(html), 0o644); err != nil {
 		return fmt.Errorf("error writing HTML file: %w", err)
 	}
 
@@ -1260,7 +1260,6 @@ func escapeJS(s string) string {
 	s = strings.ReplaceAll(s, "\t", "\\t")
 	return s
 }
-
 
 func getClassForChange(pct, threshold float64) string {
 	if pct > threshold {

@@ -65,7 +65,6 @@ func compareSuites(before, after Suite) []ComparisonResult {
 	for _, beforeBench := range before.Benchmarks {
 		afterBench, ok := afterMap[beforeBench.Name]
 		if !ok {
-
 			continue
 		}
 
@@ -183,7 +182,7 @@ func truncateString(s string, maxLen int) string {
 	return s[:maxLen-3] + "..."
 }
 
-type comparisonJSON struct {
+type ComparisonJSON struct {
 	Name              string  `json:"name"`
 	OldNsPerOp        float64 `json:"oldNsPerOp"`
 	NewNsPerOp        float64 `json:"newNsPerOp"`
@@ -197,9 +196,9 @@ type comparisonJSON struct {
 }
 
 func FormatComparisonAsJSON(results []ComparisonResult) string {
-	jsonResults := make([]comparisonJSON, len(results))
+	jsonResults := make([]ComparisonJSON, len(results))
 	for i, r := range results {
-		jsonResults[i] = comparisonJSON{
+		jsonResults[i] = ComparisonJSON{
 			Name:              r.Name,
 			OldNsPerOp:        r.OldNsPerOp,
 			NewNsPerOp:        r.NewNsPerOp,

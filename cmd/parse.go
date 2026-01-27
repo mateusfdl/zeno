@@ -37,9 +37,8 @@ func (pc *ParseCommand) Run(args []string) error {
 		return err
 	}
 
-	parser := bench.NewParser()
-
-	suites, err := parser.ParseStdin()
+	p := bench.NewParser()
+	suites, err := p.ParseStdin()
 	if err != nil {
 		return fmt.Errorf("error parsing benchmark: %w", err)
 	}

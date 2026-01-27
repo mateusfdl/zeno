@@ -6,10 +6,18 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
-	"github.com/charmbracelet/bubbletea"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mateusfdl/zeno/bench"
 )
+
+type BenchmarkLineMsg struct {
+	Line string
+}
+
+type StreamDoneMsg struct {
+	Err error
+}
 
 type SortMode int
 
@@ -34,6 +42,8 @@ type Model struct {
 	sortMode     SortMode
 	viewport     viewport.Model
 	ready        bool
+	streaming    bool
+	parser       *bench.StreamingParser
 }
 
 func NewModel(runs []bench.Run, threshold float64) Model {
@@ -62,6 +72,21 @@ func NewComparisonModel(comparison []bench.ComparisonResult, threshold float64) 
 	}
 }
 
+func NewStreamingModel(threshold float64) Model {
+	vp := viewport.New(80, 20)
+	vp.Style = lipgloss.NewStyle()
+	return Model{
+		runs:       []bench.Run{{Suites: []bench.Suite{}}},
+		threshold:  threshold,
+		width:      80,
+		height:     24,
+		currentTab: 0,
+		viewport:   vp,
+		streaming:  true,
+		parser:     bench.NewStreamingParser(),
+	}
+}
+
 func (m Model) Init() tea.Cmd {
 	return nil
 }
@@ -71,6 +96,37 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
+	case BenchmarkLineMsg:
+		suite, benchmark, err := m.parser.ParseLine(msg.Line)
+		if err == nil {
+			if suite != nil {
+				if len(m.runs) == 0 {
+					m.runs = []bench.Run{{Suites: []bench.Suite{}}}
+				}
+				m.runs[0].Suites = append(m.runs[0].Suites, *suite)
+			} else if benchmark != nil {
+				if len(m.runs) > 0 && len(m.runs[0].Suites) > 0 {
+					lastIdx := len(m.runs[0].Suites) - 1
+					m.runs[0].Suites[lastIdx].Benchmarks = append(
+						m.runs[0].Suites[lastIdx].Benchmarks,
+						*benchmark,
+					)
+				}
+			}
+		}
+
+		if m.ready {
+			m.viewport.SetContent(m.getViewContent())
+		}
+		return m, nil
+
+	case StreamDoneMsg:
+		m.streaming = false
+		if m.ready {
+			m.viewport.SetContent(m.getViewContent())
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		if m.showHelp {
 			m.showHelp = false
@@ -195,10 +251,6 @@ func (m Model) View() string {
 		return m.renderHelpModal()
 	}
 
-	if !m.ready {
-		return "\n  Loading..."
-	}
-
 	viewportContent := m.viewport.View()
 	scrollbar := m.renderScrollbar()
 
@@ -209,6 +261,10 @@ func (m Model) View() string {
 	)
 
 	return renderContainer(contentWithScrollbar, m.renderTabs(), m.renderHelp())
+}
+
+func (m Model) renderHelp() string {
+	return footerStyle.Render("?: help | q: quit | 1/2/3: tabs | j/k: scroll")
 }
 
 func (m Model) renderScrollbar() string {
@@ -465,7 +521,6 @@ func (m Model) renderComparisonTable() string {
 }
 
 func (m Model) renderBenchmarkTimeChart(suite bench.Suite) string {
-
 	var bars []BarValue
 	maxTime := 0.0
 
@@ -518,7 +573,6 @@ func (m Model) renderBenchmarkTimeChart(suite bench.Suite) string {
 }
 
 func (m Model) renderBenchmarkMemoryChart(suite bench.Suite) string {
-
 	var bars []BarValue
 	maxMem := 0.0
 
@@ -616,11 +670,6 @@ func (m Model) renderTabs() string {
 	}
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, parts...)
-}
-
-func (m Model) renderHelp() string {
-	help := "?: help | q: quit | 1/2/3: tabs | j/k: scroll"
-	return footerStyle.Render(help)
 }
 
 func (m Model) renderHelpModal() string {

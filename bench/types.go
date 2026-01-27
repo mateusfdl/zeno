@@ -49,7 +49,6 @@ type ComparisonResult struct {
 }
 
 func (c *ComparisonResult) IsRegression(threshold float64) bool {
-
 	if c.NsPerOpPct > threshold {
 		return true
 	}

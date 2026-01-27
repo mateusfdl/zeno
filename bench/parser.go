@@ -222,3 +222,115 @@ func bytesToString(b []byte) string {
 	}
 	return unsafe.String(&b[0], len(b))
 }
+
+type StreamingParser struct {
+	currentSuite *Suite
+	goVersion    string
+}
+
+func NewStreamingParser() *StreamingParser {
+	return &StreamingParser{}
+}
+
+func (p *StreamingParser) ParseLine(line string) (*Suite, *Benchmark, error) {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return nil, nil, nil
+	}
+
+	switch {
+	case strings.HasPrefix(line, "goos:"):
+		_, value, found := strings.Cut(line, ":")
+		if !found {
+			return nil, nil, nil
+		}
+		p.currentSuite = &Suite{
+			Goos:       strings.TrimSpace(value),
+			Benchmarks: make([]Benchmark, 0, 32),
+		}
+		if p.goVersion != "" {
+			p.currentSuite.Go = p.goVersion
+		}
+		return p.currentSuite, nil, nil
+
+	case strings.HasPrefix(line, "goarch:"):
+		if p.currentSuite != nil {
+			_, value, _ := strings.Cut(line, ":")
+			p.currentSuite.Goarch = strings.TrimSpace(value)
+		}
+		return nil, nil, nil
+
+	case strings.HasPrefix(line, "pkg:"):
+		if p.currentSuite != nil {
+			_, value, _ := strings.Cut(line, ":")
+			p.currentSuite.Pkg = strings.TrimSpace(value)
+		}
+		return nil, nil, nil
+
+	case strings.HasPrefix(line, "Benchmark"):
+		bench, err := p.parseBenchmarkLine(line)
+		return nil, bench, err
+	}
+
+	return nil, nil, nil
+}
+
+func (p *StreamingParser) parseBenchmarkLine(line string) (*Benchmark, error) {
+	parts := strings.Split(line, "\t")
+	if len(parts) < 3 {
+		return nil, fmt.Errorf("invalid benchmark format: expected at least 3 fields, got %d", len(parts))
+	}
+
+	bench := &Benchmark{
+		Name: strings.TrimSpace(parts[0]),
+	}
+
+	runs, err := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("%s: could not parse runs: %w", bench.Name, err)
+	}
+	bench.Runs = runs
+
+	for i := 2; i < len(parts); i++ {
+		metric := strings.TrimSpace(parts[i])
+		if metric == "" {
+			continue
+		}
+		valueStr, unit, found := strings.Cut(metric, " ")
+		if !found {
+			continue
+		}
+
+		value, err := strconv.ParseFloat(valueStr, 64)
+		if err != nil {
+			continue
+		}
+
+		switch unit {
+		case "ns/op":
+			bench.NsPerOp = value
+		case "B/op":
+			if bench.Mem == nil {
+				bench.Mem = &Mem{}
+			}
+			bench.Mem.BytesPerOp = value
+		case "allocs/op":
+			if bench.Mem == nil {
+				bench.Mem = &Mem{}
+			}
+			bench.Mem.AllocsPerOp = value
+		case "MB/s":
+			if bench.Mem == nil {
+				bench.Mem = &Mem{}
+			}
+			bench.Mem.MBPerSec = value
+		default:
+			if bench.Custom == nil {
+				bench.Custom = make(map[string]float64, 4)
+			}
+			bench.Custom[unit] = value
+		}
+	}
+
+	return bench, nil
+}
