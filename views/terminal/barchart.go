@@ -74,10 +74,10 @@ func (bc *BarChart) Render() string {
 			lipgloss.NewStyle().Width(valueWidth).Align(lipgloss.Right).Render(valueStr),
 		)
 
-		sb.WriteString(row + "\n")
+		sb.WriteString(row + "\n\n")
 	}
 
-	return sb.String()
+	return strings.TrimSuffix(sb.String(), "\n")
 }
 
 func formatValueWithMode(v float64, showPercent bool) string {
