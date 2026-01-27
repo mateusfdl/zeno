@@ -1,6 +1,7 @@
 package bench
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"strings"
@@ -11,7 +12,11 @@ func CompareTwoRuns(before, after Run) ([]ComparisonResult, error) {
 		return nil, fmt.Errorf("number of suites mismatch: %d vs %d", len(before.Suites), len(after.Suites))
 	}
 
-	var results []ComparisonResult
+	totalBenchmarks := 0
+	for _, s := range before.Suites {
+		totalBenchmarks += len(s.Benchmarks)
+	}
+	results := make([]ComparisonResult, 0, totalBenchmarks)
 
 	for i := 0; i < len(before.Suites); i++ {
 		beforeSuite := before.Suites[i]
@@ -51,9 +56,8 @@ func CompareTwoFiles(beforePath, afterPath string) ([]ComparisonResult, error) {
 }
 
 func compareSuites(before, after Suite) []ComparisonResult {
-	var results []ComparisonResult
-
-	afterMap := make(map[string]Benchmark)
+	results := make([]ComparisonResult, 0, len(before.Benchmarks))
+	afterMap := make(map[string]Benchmark, len(after.Benchmarks))
 	for _, b := range after.Benchmarks {
 		afterMap[b.Name] = b
 	}
@@ -160,7 +164,7 @@ func FormatComparisonResults(results []ComparisonResult, threshold float64) stri
 	return sb.String()
 }
 
-func formatDelta(diff, pct float64) string {
+func formatDelta(_, pct float64) string {
 	if math.Abs(pct) < 0.01 {
 		return "~0%"
 	}
@@ -179,26 +183,39 @@ func truncateString(s string, maxLen int) string {
 	return s[:maxLen-3] + "..."
 }
 
+type comparisonJSON struct {
+	Name              string  `json:"name"`
+	OldNsPerOp        float64 `json:"oldNsPerOp"`
+	NewNsPerOp        float64 `json:"newNsPerOp"`
+	NsPerOpChange     float64 `json:"nsPerOpChange"`
+	OldBytesPerOp     float64 `json:"oldBytesPerOp"`
+	NewBytesPerOp     float64 `json:"newBytesPerOp"`
+	BytesPerOpChange  float64 `json:"bytesPerOpChange"`
+	OldAllocsPerOp    float64 `json:"oldAllocsPerOp,omitempty"`
+	NewAllocsPerOp    float64 `json:"newAllocsPerOp,omitempty"`
+	AllocsPerOpChange float64 `json:"allocsPerOpChange,omitempty"`
+}
+
 func FormatComparisonAsJSON(results []ComparisonResult) string {
-
-	var sb strings.Builder
-	sb.WriteString("[\n")
-
+	jsonResults := make([]comparisonJSON, len(results))
 	for i, r := range results {
-		if i > 0 {
-			sb.WriteString(",\n")
+		jsonResults[i] = comparisonJSON{
+			Name:              r.Name,
+			OldNsPerOp:        r.OldNsPerOp,
+			NewNsPerOp:        r.NewNsPerOp,
+			NsPerOpChange:     r.NsPerOpPct,
+			OldBytesPerOp:     r.OldBytes,
+			NewBytesPerOp:     r.NewBytes,
+			BytesPerOpChange:  r.BytesPct,
+			OldAllocsPerOp:    r.OldAllocs,
+			NewAllocsPerOp:    r.NewAllocs,
+			AllocsPerOpChange: r.AllocsPct,
 		}
-		sb.WriteString(fmt.Sprintf("  {\n"))
-		sb.WriteString(fmt.Sprintf("    \"name\": \"%s\",\n", r.Name))
-		sb.WriteString(fmt.Sprintf("    \"oldNsPerOp\": %.2f,\n", r.OldNsPerOp))
-		sb.WriteString(fmt.Sprintf("    \"newNsPerOp\": %.2f,\n", r.NewNsPerOp))
-		sb.WriteString(fmt.Sprintf("    \"nsPerOpChange\": %.2f,\n", r.NsPerOpPct))
-		sb.WriteString(fmt.Sprintf("    \"oldBytesPerOp\": %.2f,\n", r.OldBytes))
-		sb.WriteString(fmt.Sprintf("    \"newBytesPerOp\": %.2f,\n", r.NewBytes))
-		sb.WriteString(fmt.Sprintf("    \"bytesPerOpChange\": %.2f\n", r.BytesPct))
-		sb.WriteString(fmt.Sprintf("  }"))
 	}
 
-	sb.WriteString("\n]\n")
-	return sb.String()
+	data, err := json.MarshalIndent(jsonResults, "", "  ")
+	if err != nil {
+		return "[]"
+	}
+	return string(data)
 }

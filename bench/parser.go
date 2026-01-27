@@ -2,11 +2,23 @@ package bench
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"os"
 	"strconv"
 	"strings"
+	"unsafe"
+)
+
+var (
+	prefixGoos      = []byte("goos:")
+	prefixGoarch    = []byte("goarch:")
+	prefixPkg       = []byte("pkg:")
+	prefixBenchmark = []byte("Benchmark")
+	prefixPASS      = []byte("PASS")
+	prefixFAIL      = []byte("FAIL")
+	prefixOk        = []byte("ok")
 )
 
 type Parser struct {
@@ -20,7 +32,7 @@ func NewParser() *Parser {
 func (p *Parser) Parse(r io.Reader) ([]Suite, error) {
 	br := bufio.NewReader(r)
 
-	var suites []Suite
+	suites := make([]Suite, 0, 4)
 
 	for {
 		line, isPrefix, err := br.ReadLine()
@@ -34,10 +46,8 @@ func (p *Parser) Parse(r io.Reader) ([]Suite, error) {
 			return nil, fmt.Errorf("line too long")
 		}
 
-		lineStr := string(line)
-
-		if strings.HasPrefix(lineStr, "goos:") {
-			suite, err := p.readBenchmarkSuite(br, lineStr)
+		if len(line) > 0 && line[0] == 'g' && bytes.HasPrefix(line, prefixGoos) {
+			suite, err := p.readBenchmarkSuite(br, line)
 			if err != nil {
 				return nil, err
 			}
@@ -49,7 +59,7 @@ func (p *Parser) Parse(r io.Reader) ([]Suite, error) {
 }
 
 func (p *Parser) ParseBytes(data []byte) ([]Suite, error) {
-	return p.Parse(strings.NewReader(string(data)))
+	return p.Parse(bytes.NewReader(data))
 }
 
 func (p *Parser) ParseFile(path string) ([]Suite, error) {
@@ -66,15 +76,16 @@ func (p *Parser) ParseStdin() ([]Suite, error) {
 	return p.Parse(os.Stdin)
 }
 
-func (p *Parser) readBenchmarkSuite(br *bufio.Reader, firstLine string) (*Suite, error) {
-	split := strings.SplitN(firstLine, ": ", 2)
-	if len(split) != 2 {
-		return nil, fmt.Errorf("invalid goos line: %s", firstLine)
+func (p *Parser) readBenchmarkSuite(br *bufio.Reader, firstLine []byte) (*Suite, error) {
+	lineStr := bytesToString(firstLine)
+	_, value, found := strings.Cut(lineStr, ": ")
+	if !found {
+		return nil, fmt.Errorf("invalid goos line: %s", lineStr)
 	}
 
 	suite := Suite{
-		Goos:       strings.TrimSpace(split[1]),
-		Benchmarks: make([]Benchmark, 0),
+		Goos:       strings.TrimSpace(value),
+		Benchmarks: make([]Benchmark, 0, 32),
 	}
 
 	if p.goVersion != "" {
@@ -93,50 +104,58 @@ func (p *Parser) readBenchmarkSuite(br *bufio.Reader, firstLine string) (*Suite,
 			return nil, fmt.Errorf("line too long")
 		}
 
-		lineStr := string(line)
-
-		if strings.HasPrefix(lineStr, "PASS") || strings.HasPrefix(lineStr, "FAIL") || strings.HasPrefix(lineStr, "ok") {
-			break
-		}
-
-		if strings.HasPrefix(lineStr, "goarch:") {
-			split := strings.SplitN(lineStr, ": ", 2)
-			if len(split) == 2 {
-				suite.Goarch = strings.TrimSpace(split[1])
-			}
+		if len(line) == 0 {
 			continue
 		}
 
-		if strings.HasPrefix(lineStr, "pkg:") {
-			split := strings.SplitN(lineStr, ": ", 2)
-			if len(split) == 2 {
-				suite.Pkg = strings.TrimSpace(split[1])
+		switch line[0] {
+		case 'P':
+			if bytes.HasPrefix(line, prefixPASS) {
+				return &suite, nil
 			}
-			continue
-		}
-
-		if strings.HasPrefix(lineStr, "Benchmark") {
-			bench, err := p.parseBenchmark(lineStr)
-			if err != nil {
-				return nil, fmt.Errorf("%w: %q", err, lineStr)
+		case 'F':
+			if bytes.HasPrefix(line, prefixFAIL) {
+				return &suite, nil
 			}
-			suite.Benchmarks = append(suite.Benchmarks, *bench)
+		case 'o':
+			if bytes.HasPrefix(line, prefixOk) {
+				return &suite, nil
+			}
+		case 'g':
+			if bytes.HasPrefix(line, prefixGoarch) {
+				lineStr := bytesToString(line)
+				if _, value, found := strings.Cut(lineStr, ": "); found {
+					suite.Goarch = strings.TrimSpace(value)
+				}
+			}
+		case 'p':
+			if bytes.HasPrefix(line, prefixPkg) {
+				lineStr := bytesToString(line)
+				if _, value, found := strings.Cut(lineStr, ": "); found {
+					suite.Pkg = strings.TrimSpace(value)
+				}
+			}
+		case 'B':
+			if bytes.HasPrefix(line, prefixBenchmark) {
+				lineStr := bytesToString(line)
+				bench, err := p.parseBenchmark(lineStr)
+				if err != nil {
+					return nil, fmt.Errorf("%w: %q", err, lineStr)
+				}
+				suite.Benchmarks = append(suite.Benchmarks, *bench)
+			}
 		}
 	}
-
-	return &suite, nil
 }
 
 func (p *Parser) parseBenchmark(line string) (*Benchmark, error) {
-
 	parts := strings.Split(line, "\t")
 	if len(parts) < 3 {
 		return nil, fmt.Errorf("invalid benchmark format: expected at least 3 fields, got %d", len(parts))
 	}
 
 	bench := &Benchmark{
-		Name:   strings.TrimSpace(parts[0]),
-		Custom: make(map[string]float64),
+		Name: strings.TrimSpace(parts[0]),
 	}
 
 	runs, err := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 64)
@@ -155,18 +174,15 @@ func (p *Parser) parseBenchmark(line string) (*Benchmark, error) {
 }
 
 func (p *Parser) parseMetric(bench *Benchmark, metric string) error {
-
-	parts := strings.Fields(metric)
-	if len(parts) < 2 {
+	valueStr, unit, found := strings.Cut(metric, " ")
+	if !found {
 		return fmt.Errorf("%s: invalid metric format: %s", bench.Name, metric)
 	}
 
-	value, err := strconv.ParseFloat(parts[0], 64)
+	value, err := strconv.ParseFloat(valueStr, 64)
 	if err != nil {
 		return fmt.Errorf("%s: could not parse value: %w", bench.Name, err)
 	}
-
-	unit := parts[1]
 
 	switch unit {
 	case "ns/op":
@@ -187,7 +203,9 @@ func (p *Parser) parseMetric(bench *Benchmark, metric string) error {
 		}
 		bench.Mem.MBPerSec = value
 	default:
-
+		if bench.Custom == nil {
+			bench.Custom = make(map[string]float64, 4)
+		}
 		bench.Custom[unit] = value
 	}
 
@@ -196,4 +214,11 @@ func (p *Parser) parseMetric(bench *Benchmark, metric string) error {
 
 func (p *Parser) SetGoVersion(version string) {
 	p.goVersion = version
+}
+
+func bytesToString(b []byte) string {
+	if len(b) == 0 {
+		return ""
+	}
+	return unsafe.String(&b[0], len(b))
 }
