@@ -91,13 +91,6 @@ func formatValueWithMode(v float64, showPercent bool) string {
 	return formatRawValue(v)
 }
 
-func formatValue(v float64) string {
-	if v > 0 {
-		return "+" + formatFloat(v) + "%"
-	}
-	return formatFloat(v) + "%"
-}
-
 func formatRawValue(v float64) string {
 	if v >= 1000000 {
 		return fmt.Sprintf("%.1fM", v/1000000)

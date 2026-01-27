@@ -72,7 +72,7 @@ func (mc *MergeCommand) Run(args []string) error {
 }
 
 func (mc *MergeCommand) Usage() string {
-	return `Usage: Zeno merge [options] <file1.json> [file2.json ...]
+	return `Usage: zeno merge [options] <file1.json> [file2.json ...]
 
 Merge multiple benchmark JSON files into one.
 
@@ -80,9 +80,8 @@ Combines benchmark runs from multiple files into a single JSON file.
 Can sort and deduplicate runs.
 
 Examples:
-  Zeno merge -o combined.json file1.json file2.json file3.json
-  Zeno merge --unique --sort-desc -o all.json *.json
-  Zeno merge before.json after.json
-
-Options:`
+  zeno merge -o combined.json file1.json file2.json file3.json
+  zeno merge --unique --sort-desc -o all.json *.json
+  zeno merge before.json after.json
+`
 }

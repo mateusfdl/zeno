@@ -60,7 +60,6 @@ func (m Model) Init() tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		// Close help modal on any key if it's open
 		if m.showHelp {
 			m.showHelp = false
 			return m, nil
@@ -105,10 +104,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) getMaxTab() int {
 	if len(m.comparison) > 0 {
-		return 2 // Compare mode: Summary, Time Changes, Details
+		return 2
 	}
 	if len(m.runs) > 0 {
-		return 2 // Run mode: Execution Time, Memory Usage, Benchmark Output
+		return 2
 	}
 	return 0
 }
@@ -125,10 +124,8 @@ func (m Model) View() string {
 	var content string
 
 	if len(m.comparison) > 0 {
-		// Comparison mode
 		content = m.renderComparisonView()
 	} else if len(m.runs) > 0 {
-		// Run mode with tabs
 		switch m.currentTab {
 		case 0:
 			content = m.renderExecutionTimeView()
@@ -144,32 +141,6 @@ func (m Model) View() string {
 	return renderContainer(content, m.renderTabs(), m.renderHelp())
 }
 
-func (m Model) renderRunView(run bench.Run) string {
-	var sections []string
-
-	header := m.renderHeader(run)
-	sections = append(sections, header)
-
-	for _, suite := range run.Suites {
-		suiteSection := m.renderSuite(suite)
-		sections = append(sections, suiteSection)
-
-		if len(suite.Benchmarks) > 0 {
-			timeChart := m.renderBenchmarkTimeChart(suite)
-			if timeChart != "" {
-				sections = append(sections, timeChart)
-			}
-
-			memChart := m.renderBenchmarkMemoryChart(suite)
-			if memChart != "" {
-				sections = append(sections, memChart)
-			}
-		}
-	}
-
-	return strings.Join(sections, "\n\n")
-}
-
 func (m Model) renderExecutionTimeView() string {
 	if len(m.runs) == 0 {
 		return renderNoData("No benchmark data available")
@@ -180,7 +151,6 @@ func (m Model) renderExecutionTimeView() string {
 
 	for _, suite := range run.Suites {
 		if len(suite.Benchmarks) > 0 {
-			// Add suite header
 			header := cardTitleStyle.Render(fmt.Sprintf("%s (%s/%s)", suite.Pkg, suite.Goos, suite.Goarch))
 			sections = append(sections, header)
 
@@ -208,7 +178,6 @@ func (m Model) renderMemoryUsageView() string {
 
 	for _, suite := range run.Suites {
 		if len(suite.Benchmarks) > 0 {
-			// Add suite header
 			header := cardTitleStyle.Render(fmt.Sprintf("%s (%s/%s)", suite.Pkg, suite.Goos, suite.Goarch))
 			sections = append(sections, header)
 
@@ -234,7 +203,6 @@ func (m Model) renderBenchmarkOutputView() string {
 	var sections []string
 	run := m.runs[0]
 
-	// Add run header
 	header := m.renderHeader(run)
 	sections = append(sections, header)
 
@@ -256,21 +224,6 @@ func (m Model) renderComparisonView() string {
 		return m.renderComparisonTable()
 	}
 	return renderNoData("No comparison data available")
-}
-
-func (m Model) renderAllRunsView() string {
-	var sections []string
-
-	sections = append(sections, cardTitleStyle.Render("All Benchmark Runs"))
-
-	for i, run := range m.runs {
-		runHeader := fmt.Sprintf("%s. %s", numberToString(i+1), renderRunLine(run))
-		sections = append(sections, lipgloss.NewStyle().Foreground(secondaryColor).Render(runHeader))
-		suites := renderSuiteList(run.Suites)
-		sections = append(sections, "  "+suites)
-	}
-
-	return strings.Join(sections, "\n")
 }
 
 func (m Model) renderHeader(run bench.Run) string {
@@ -609,7 +562,6 @@ func (m Model) renderHelpModal() string {
 
 	modal := modalStyle.Render(strings.Join(lines, "\n"))
 
-	// Center the modal
 	return lipgloss.Place(
 		m.width,
 		m.height,
@@ -653,28 +605,6 @@ func renderBenchmark(b bench.Benchmark) string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, parts...)
 }
 
-func renderSuiteList(suites []bench.Suite) string {
-	var parts []string
-	for _, suite := range suites {
-		parts = append(parts, fmt.Sprintf("%s (%d benches)", suite.Pkg, len(suite.Benchmarks)))
-	}
-	return strings.Join(parts, ", ")
-}
-
-func renderRunLine(run bench.Run) string {
-	parts := []string{}
-	if run.Version != "" {
-		parts = append(parts, run.Version)
-	}
-	if run.Date > 0 {
-		parts = append(parts, renderDate(run.Date))
-	}
-	if len(run.Tags) > 0 {
-		parts = append(parts, renderTags(run.Tags))
-	}
-	return strings.Join(parts, " · ")
-}
-
 func renderValue(v string) string {
 	if v == "" {
 		return "—"
@@ -695,8 +625,4 @@ func renderDate(ts int64) string {
 	}
 
 	return fmt.Sprintf("@%d", ts)
-}
-
-func numberToString(n int) string {
-	return fmt.Sprintf("%d", n)
 }

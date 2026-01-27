@@ -330,7 +330,7 @@ func (g *Generator) generateTimeBarChart(suite bench.Suite) string {
 
 		pct := (b.NsPerOp / maxVal) * 100
 		if pct < 5 {
-			pct = 5 // Minimum visibility
+			pct = 5
 		}
 		color, shade := g.getPerformanceColor(b.NsPerOp, maxVal, &greenCount, &yellowCount, &redCount)
 

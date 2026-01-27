@@ -65,7 +65,7 @@ func (pc *ParseCommand) Run(args []string) error {
 }
 
 func (pc *ParseCommand) Usage() string {
-	return `Usage: Zeno parse [options]
+	return `Usage: zeno parse [options]
 
 Parse benchmark output from stdin and output structured JSON.
 
@@ -73,9 +73,7 @@ Reads Go benchmark output from stdin and produces JSON format.
 Can write to a file or stdout.
 
 Examples:
-  go test -bench=. -benchmem | Zeno parse -o results.json
-  go test -bench=. | Zeno parse --version=v1.0.0 --tags=ci
-  Zeno parse --append -o history.json
-
-Options:`
+  go test -bench=. -benchmem | ueno parse -o results.json
+  go test -bench=. | zeno parse --version=v1.0.0 --tags=ci
+  zeno parse --append -o history.json`
 }

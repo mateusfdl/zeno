@@ -13,21 +13,6 @@ var (
 	mutedColor     = lipgloss.Color("241")
 	borderColor    = lipgloss.Color("238")
 
-	titleStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(primaryColor).
-			MarginBottom(1)
-
-	subtitleStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("255"))
-
-	headerStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("255")).
-			Background(primaryColor).
-			Padding(0, 1)
-
 	cardStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(borderColor).
@@ -37,10 +22,6 @@ var (
 			Bold(true).
 			Foreground(primaryColor).
 			MarginBottom(1)
-
-	metricLabelStyle = lipgloss.NewStyle().
-				Foreground(mutedColor).
-				MarginRight(1)
 
 	metricValueStyle = lipgloss.NewStyle().
 				Bold(true).
@@ -73,14 +54,6 @@ var (
 	footerStyle = lipgloss.NewStyle().
 			Foreground(mutedColor).
 			MarginTop(1)
-
-	keyStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("255"))
-
-	helpStyle = lipgloss.NewStyle().
-			Foreground(mutedColor).
-			MarginLeft(1)
 )
 
 func GetChangeStyle(pct float64, threshold float64) lipgloss.Style {

@@ -58,3 +58,51 @@ func BenchmarkContainsLong(b *testing.B) {
 		Contains(longString, "world")
 	}
 }
+
+func BenchmarkReverseShort1(b *testing.B) {
+	for b.Loop() {
+		Reverse(shortString)
+	}
+}
+
+func BenchmarkReverseMedium1(b *testing.B) {
+	for b.Loop() {
+		Reverse(mediumString)
+	}
+}
+
+func BenchmarkReverseLong1(b *testing.B) {
+	for b.Loop() {
+		Reverse(longString)
+	}
+}
+
+func BenchmarkCountWordsShort1(b *testing.B) {
+	for b.Loop() {
+		CountWords(shortString)
+	}
+}
+
+func BenchmarkCountWordsMedium1(b *testing.B) {
+	for b.Loop() {
+		CountWords(mediumString)
+	}
+}
+
+func BenchmarkCountWordsLong1(b *testing.B) {
+	for b.Loop() {
+		CountWords(longString)
+	}
+}
+
+func BenchmarkContainsShort1(b *testing.B) {
+	for b.Loop() {
+		Contains(shortString, "world")
+	}
+}
+
+func BenchmarkContainsLong1(b *testing.B) {
+	for b.Loop() {
+		Contains(longString, "world")
+	}
+}

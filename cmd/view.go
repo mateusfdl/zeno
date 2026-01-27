@@ -176,7 +176,7 @@ func (vc *ViewCommand) runWebStdin() error {
 }
 
 func (vc *ViewCommand) Usage() string {
-	return `Usage: Zeno view [options]
+	return `Usage: zeno view [options]
 
 View benchmark results in a TUI or generate HTML report.
 
@@ -185,22 +185,22 @@ Can view single files, compare two files, or pipe from go test.
 
 Examples:
   # View a JSON file in TUI
-  Zeno view -f results.json
+  zeno view -f results.json
 
   # Compare two files in TUI
-  Zeno view -f current.json --compare baseline.json
+  zeno view -f current.json --compare baseline.json
 
   # Generate HTML report
-  Zeno view --web -f results.json
+  eno view --web -f results.json
 
   # Generate HTML comparison
-  Zeno view --web -f current.json --compare baseline.json -o compare.html
+  zeno view --web -f current.json --compare baseline.json -o compare.html
 
   # Pipe from go test to HTML
-  go test -bench=. -benchmem | Zeno view --web
+  go test -bench=. -benchmem | zeno view --web
 
   # Save and view
-  go test -bench=. | Zeno parse | Zeno view --web
+  go test -bench=. | zeno parse | zeno view --web
 
 Options:`
 }

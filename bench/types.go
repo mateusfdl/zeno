@@ -61,5 +61,6 @@ func (c *ComparisonResult) IsRegression(threshold float64) bool {
 	if c.AllocsPct > threshold {
 		return true
 	}
+
 	return false
 }

@@ -57,7 +57,7 @@ func (cc *CompareCommand) Run(args []string) error {
 }
 
 func (cc *CompareCommand) Usage() string {
-	return `Usage: Zeno compare [options] <before.json> <after.json>
+	return `Usage: zeno compare [options] <before.json> <after.json>
 
 Compare two benchmark runs and detect performance regressions.
 
@@ -65,9 +65,9 @@ Compares benchmark metrics between two runs and calculates percentage changes.
 Reports regressions exceeding the threshold.
 
 Examples:
-  Zeno compare baseline.json current.json
-  Zeno compare --threshold=2.5 before.json after.json
-  Zeno compare --format=json old.json new.json
+  zeno compare baseline.json current.json
+  zeno compare --threshold=2.5 before.json after.json
+  zeno compare --format=json old.json new.json
 
 Options:`
 }
