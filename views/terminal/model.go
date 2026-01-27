@@ -2,11 +2,22 @@ package tui
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mateusfdl/zeno/bench"
+)
+
+type SortMode int
+
+const (
+	SortNone SortMode = iota
+	SortByNameAsc
+	SortByNameDesc
+	SortByValueAsc
+	SortByValueDesc
 )
 
 type Model struct {
@@ -19,6 +30,7 @@ type Model struct {
 	showHelp     bool
 	selectedRuns []int
 	currentTab   int
+	sortMode     SortMode
 }
 
 func NewModel(runs []bench.Run, threshold float64) Model {
@@ -48,21 +60,38 @@ func (m Model) Init() tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// Close help modal on any key if it's open
+		if m.showHelp {
+			m.showHelp = false
+			return m, nil
+		}
+
 		switch msg.String() {
 		case "q", "ctrl+c":
 			m.quitting = true
 			return m, tea.Quit
-		case "h", "?":
-			m.showHelp = !m.showHelp
+		case "?":
+			m.showHelp = true
 			return m, nil
 		case "1", "2", "3":
-
-			if msg.String() == "1" && len(m.runs) > 0 {
-				m.currentTab = 0
-			} else if msg.String() == "2" && len(m.comparison) > 0 {
-				m.currentTab = 1
-			} else if msg.String() == "3" && len(m.runs) > 1 {
-				m.currentTab = 2
+			tabNum := int(msg.String()[0] - '1')
+			maxTab := m.getMaxTab()
+			if tabNum <= maxTab {
+				m.currentTab = tabNum
+			}
+			return m, nil
+		case "s":
+			if m.sortMode == SortByNameAsc {
+				m.sortMode = SortByNameDesc
+			} else {
+				m.sortMode = SortByNameAsc
+			}
+			return m, nil
+		case "S":
+			if m.sortMode == SortByValueAsc {
+				m.sortMode = SortByValueDesc
+			} else {
+				m.sortMode = SortByValueAsc
 			}
 			return m, nil
 		}
@@ -74,32 +103,42 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) getMaxTab() int {
+	if len(m.comparison) > 0 {
+		return 2 // Compare mode: Summary, Time Changes, Details
+	}
+	if len(m.runs) > 0 {
+		return 2 // Run mode: Execution Time, Memory Usage, Benchmark Output
+	}
+	return 0
+}
+
 func (m Model) View() string {
 	if m.quitting {
 		return ""
 	}
 
+	if m.showHelp {
+		return m.renderHelpModal()
+	}
+
 	var content string
 
-	switch m.currentTab {
-	case 0:
-		if len(m.runs) > 0 {
-			content = m.renderRunView(m.runs[0])
-		} else {
-			content = renderNoData("No benchmark data available")
+	if len(m.comparison) > 0 {
+		// Comparison mode
+		content = m.renderComparisonView()
+	} else if len(m.runs) > 0 {
+		// Run mode with tabs
+		switch m.currentTab {
+		case 0:
+			content = m.renderExecutionTimeView()
+		case 1:
+			content = m.renderMemoryUsageView()
+		case 2:
+			content = m.renderBenchmarkOutputView()
 		}
-	case 1:
-		if len(m.comparison) > 0 {
-			content = m.renderComparisonView()
-		} else {
-			content = renderNoData("No comparison data available")
-		}
-	case 2:
-		if len(m.runs) > 0 {
-			content = m.renderAllRunsView()
-		} else {
-			content = renderNoData("No benchmark data available")
-		}
+	} else {
+		content = renderNoData("No benchmark data available")
 	}
 
 	return renderContainer(content, m.renderTabs(), m.renderHelp())
@@ -131,19 +170,92 @@ func (m Model) renderRunView(run bench.Run) string {
 	return strings.Join(sections, "\n\n")
 }
 
-func (m Model) renderComparisonView() string {
+func (m Model) renderExecutionTimeView() string {
+	if len(m.runs) == 0 {
+		return renderNoData("No benchmark data available")
+	}
+
 	var sections []string
+	run := m.runs[0]
 
-	summary := m.renderComparisonSummary()
-	sections = append(sections, summary)
+	for _, suite := range run.Suites {
+		if len(suite.Benchmarks) > 0 {
+			// Add suite header
+			header := cardTitleStyle.Render(fmt.Sprintf("%s (%s/%s)", suite.Pkg, suite.Goos, suite.Goarch))
+			sections = append(sections, header)
 
-	chart := m.renderBarChart()
-	sections = append(sections, chart)
+			timeChart := m.renderBenchmarkTimeChart(suite)
+			if timeChart != "" {
+				sections = append(sections, timeChart)
+			}
+		}
+	}
 
-	table := m.renderComparisonTable()
-	sections = append(sections, table)
+	if len(sections) == 0 {
+		return renderNoData("No execution time data available")
+	}
 
 	return strings.Join(sections, "\n\n")
+}
+
+func (m Model) renderMemoryUsageView() string {
+	if len(m.runs) == 0 {
+		return renderNoData("No benchmark data available")
+	}
+
+	var sections []string
+	run := m.runs[0]
+
+	for _, suite := range run.Suites {
+		if len(suite.Benchmarks) > 0 {
+			// Add suite header
+			header := cardTitleStyle.Render(fmt.Sprintf("%s (%s/%s)", suite.Pkg, suite.Goos, suite.Goarch))
+			sections = append(sections, header)
+
+			memChart := m.renderBenchmarkMemoryChart(suite)
+			if memChart != "" {
+				sections = append(sections, memChart)
+			}
+		}
+	}
+
+	if len(sections) == 0 {
+		return renderNoData("No memory usage data available")
+	}
+
+	return strings.Join(sections, "\n\n")
+}
+
+func (m Model) renderBenchmarkOutputView() string {
+	if len(m.runs) == 0 {
+		return renderNoData("No benchmark data available")
+	}
+
+	var sections []string
+	run := m.runs[0]
+
+	// Add run header
+	header := m.renderHeader(run)
+	sections = append(sections, header)
+
+	for _, suite := range run.Suites {
+		suiteSection := m.renderSuite(suite)
+		sections = append(sections, suiteSection)
+	}
+
+	return strings.Join(sections, "\n\n")
+}
+
+func (m Model) renderComparisonView() string {
+	switch m.currentTab {
+	case 0:
+		return m.renderComparisonSummary()
+	case 1:
+		return m.renderBarChart()
+	case 2:
+		return m.renderComparisonTable()
+	}
+	return renderNoData("No comparison data available")
 }
 
 func (m Model) renderAllRunsView() string {
@@ -308,8 +420,7 @@ func (m Model) renderBenchmarkTimeChart(suite bench.Suite) string {
 
 	for _, b := range suite.Benchmarks {
 		if b.NsPerOp > 0 {
-
-			color := primaryColor
+			color := successColor
 			if b.NsPerOp > maxTime*0.7 {
 				color = warningColor
 			}
@@ -328,6 +439,8 @@ func (m Model) renderBenchmarkTimeChart(suite bench.Suite) string {
 	if len(bars) == 0 {
 		return ""
 	}
+
+	m.sortBars(bars)
 
 	chart := BarChart{
 		Width:       m.width - 10,
@@ -360,8 +473,7 @@ func (m Model) renderBenchmarkMemoryChart(suite bench.Suite) string {
 
 	for _, b := range suite.Benchmarks {
 		if b.Mem != nil && b.Mem.BytesPerOp > 0 {
-
-			color := primaryColor
+			color := successColor
 			if b.Mem.BytesPerOp > maxMem*0.7 {
 				color = warningColor
 			}
@@ -381,6 +493,8 @@ func (m Model) renderBenchmarkMemoryChart(suite bench.Suite) string {
 		return ""
 	}
 
+	m.sortBars(bars)
+
 	chart := BarChart{
 		Width:       m.width - 10,
 		Values:      bars,
@@ -393,8 +507,37 @@ func (m Model) renderBenchmarkMemoryChart(suite bench.Suite) string {
 	)
 }
 
+func (m Model) sortBars(bars []BarValue) {
+	switch m.sortMode {
+	case SortByNameAsc:
+		sort.Slice(bars, func(i, j int) bool {
+			return bars[i].Label < bars[j].Label
+		})
+	case SortByNameDesc:
+		sort.Slice(bars, func(i, j int) bool {
+			return bars[i].Label > bars[j].Label
+		})
+	case SortByValueAsc:
+		sort.Slice(bars, func(i, j int) bool {
+			return bars[i].Value < bars[j].Value
+		})
+	case SortByValueDesc:
+		sort.Slice(bars, func(i, j int) bool {
+			return bars[i].Value > bars[j].Value
+		})
+	}
+}
+
 func (m Model) renderTabs() string {
-	tabs := []string{"Run", "Compare", "All Runs"}
+	var tabs []string
+
+	if len(m.comparison) > 0 {
+		tabs = []string{"Summary", "Time Changes", "Details"}
+	} else if len(m.runs) > 0 {
+		tabs = []string{"Execution Time", "Memory Usage", "Benchmark Output"}
+	} else {
+		return ""
+	}
 
 	var parts []string
 	for i, tab := range tabs {
@@ -406,29 +549,74 @@ func (m Model) renderTabs() string {
 			style = style.Foreground(primaryColor).Bold(true)
 		}
 
-		available := false
-		if i == 0 && len(m.runs) > 0 {
-			available = true
-		} else if i == 1 && len(m.comparison) > 0 {
-			available = true
-		} else if i == 2 && len(m.runs) > 1 {
-			available = true
-		}
-
-		if available {
-			parts = append(parts, style.Render(fmt.Sprintf("%d %s", i+1, tab)))
-		}
+		parts = append(parts, style.Render(fmt.Sprintf("%d %s", i+1, tab)))
 	}
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, parts...)
 }
 
 func (m Model) renderHelp() string {
-	help := "q: quit | h: toggle help"
-	if m.currentTab == 1 && len(m.comparison) > 0 {
-		help += " | 1/2/3: switch tabs"
-	}
+	help := "?: help | q: quit | 1/2/3: tabs"
 	return footerStyle.Render(help)
+}
+
+func (m Model) renderHelpModal() string {
+	modalStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(primaryColor).
+		Padding(1, 3).
+		Width(50)
+
+	titleStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(primaryColor).
+		MarginBottom(1)
+
+	keyStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("255")).
+		Width(12)
+
+	descStyle := lipgloss.NewStyle().
+		Foreground(secondaryColor)
+
+	keybinds := []struct {
+		key  string
+		desc string
+	}{
+		{"?", "Toggle this help"},
+		{"q", "Quit"},
+		{"1/2/3", "Switch tabs"},
+		{"s", "Sort by name"},
+		{"S", "Sort by value"},
+	}
+
+	var lines []string
+	lines = append(lines, titleStyle.Render("Keyboard Shortcuts"))
+	lines = append(lines, "")
+
+	for _, kb := range keybinds {
+		line := lipgloss.JoinHorizontal(
+			lipgloss.Top,
+			keyStyle.Render(kb.key),
+			descStyle.Render(kb.desc),
+		)
+		lines = append(lines, line)
+	}
+
+	lines = append(lines, "")
+	lines = append(lines, footerStyle.Render("Press any key to close"))
+
+	modal := modalStyle.Render(strings.Join(lines, "\n"))
+
+	// Center the modal
+	return lipgloss.Place(
+		m.width,
+		m.height,
+		lipgloss.Center,
+		lipgloss.Center,
+		modal,
+	)
 }
 
 func renderContainer(content, tabs, footer string) string {
