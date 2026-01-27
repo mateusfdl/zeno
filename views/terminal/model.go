@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mateusfdl/zeno/bench"
@@ -31,25 +32,33 @@ type Model struct {
 	selectedRuns []int
 	currentTab   int
 	sortMode     SortMode
+	viewport     viewport.Model
+	ready        bool
 }
 
 func NewModel(runs []bench.Run, threshold float64) Model {
+	vp := viewport.New(80, 20)
+	vp.Style = lipgloss.NewStyle()
 	return Model{
 		runs:       runs,
 		threshold:  threshold,
 		width:      80,
 		height:     24,
 		currentTab: 0,
+		viewport:   vp,
 	}
 }
 
 func NewComparisonModel(comparison []bench.ComparisonResult, threshold float64) Model {
+	vp := viewport.New(80, 20)
+	vp.Style = lipgloss.NewStyle()
 	return Model{
 		comparison: comparison,
 		threshold:  threshold,
 		width:      80,
 		height:     24,
 		currentTab: 1,
+		viewport:   vp,
 	}
 }
 
@@ -58,6 +67,9 @@ func (m Model) Init() tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	var cmds []tea.Cmd
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		if m.showHelp {
@@ -77,6 +89,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			maxTab := m.getMaxTab()
 			if tabNum <= maxTab {
 				m.currentTab = tabNum
+				m.viewport.GotoTop()
+				m.viewport.SetContent(m.getViewContent())
 			}
 			return m, nil
 		case "s":
@@ -85,6 +99,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				m.sortMode = SortByNameAsc
 			}
+			m.viewport.SetContent(m.getViewContent())
 			return m, nil
 		case "S":
 			if m.sortMode == SortByValueAsc {
@@ -92,14 +107,57 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				m.sortMode = SortByValueAsc
 			}
+			m.viewport.SetContent(m.getViewContent())
+			return m, nil
+		case "j", "down":
+			m.viewport.ScrollDown(1)
+			return m, nil
+		case "k", "up":
+			m.viewport.ScrollUp(1)
+			return m, nil
+		case "d", "ctrl+d":
+			m.viewport.HalfPageDown()
+			return m, nil
+		case "u", "ctrl+u":
+			m.viewport.HalfPageUp()
+			return m, nil
+		case "g", "home":
+			m.viewport.GotoTop()
+			return m, nil
+		case "G", "end":
+			m.viewport.GotoBottom()
 			return m, nil
 		}
+
 	case tea.WindowSizeMsg:
+		headerHeight := 4
+		footerHeight := 3
+		verticalMargins := headerHeight + footerHeight
+
 		m.width = msg.Width
 		m.height = msg.Height
+
+		if !m.ready {
+			m.viewport = viewport.New(msg.Width-2, msg.Height-verticalMargins)
+			m.viewport.YPosition = headerHeight
+			m.viewport.SetContent(m.getViewContent())
+			m.ready = true
+		} else {
+			m.viewport.Width = msg.Width - 2
+			m.viewport.Height = msg.Height - verticalMargins
+			m.viewport.SetContent(m.getViewContent())
+		}
 		return m, nil
+
+	case tea.MouseMsg:
+		m.viewport, cmd = m.viewport.Update(msg)
+		cmds = append(cmds, cmd)
+		return m, tea.Batch(cmds...)
 	}
-	return m, nil
+
+	m.viewport, cmd = m.viewport.Update(msg)
+	cmds = append(cmds, cmd)
+	return m, tea.Batch(cmds...)
 }
 
 func (m Model) getMaxTab() int {
@@ -112,6 +170,22 @@ func (m Model) getMaxTab() int {
 	return 0
 }
 
+func (m Model) getViewContent() string {
+	if len(m.comparison) > 0 {
+		return m.renderComparisonView()
+	} else if len(m.runs) > 0 {
+		switch m.currentTab {
+		case 0:
+			return m.renderExecutionTimeView()
+		case 1:
+			return m.renderMemoryUsageView()
+		case 2:
+			return m.renderBenchmarkOutputView()
+		}
+	}
+	return renderNoData("No benchmark data available")
+}
+
 func (m Model) View() string {
 	if m.quitting {
 		return ""
@@ -121,24 +195,60 @@ func (m Model) View() string {
 		return m.renderHelpModal()
 	}
 
-	var content string
-
-	if len(m.comparison) > 0 {
-		content = m.renderComparisonView()
-	} else if len(m.runs) > 0 {
-		switch m.currentTab {
-		case 0:
-			content = m.renderExecutionTimeView()
-		case 1:
-			content = m.renderMemoryUsageView()
-		case 2:
-			content = m.renderBenchmarkOutputView()
-		}
-	} else {
-		content = renderNoData("No benchmark data available")
+	if !m.ready {
+		return "\n  Loading..."
 	}
 
-	return renderContainer(content, m.renderTabs(), m.renderHelp())
+	viewportContent := m.viewport.View()
+	scrollbar := m.renderScrollbar()
+
+	contentWithScrollbar := lipgloss.JoinHorizontal(
+		lipgloss.Top,
+		viewportContent,
+		scrollbar,
+	)
+
+	return renderContainer(contentWithScrollbar, m.renderTabs(), m.renderHelp())
+}
+
+func (m Model) renderScrollbar() string {
+	totalLines := m.viewport.TotalLineCount()
+	visibleLines := m.viewport.Height
+	scrollPos := m.viewport.YOffset
+
+	if totalLines <= visibleLines {
+		return ""
+	}
+
+	scrollbarHeight := m.viewport.Height
+	thumbHeight := max(1, (visibleLines*scrollbarHeight)/totalLines)
+
+	maxScroll := totalLines - visibleLines
+	if maxScroll <= 0 {
+		maxScroll = 1
+	}
+	thumbPos := (scrollPos * (scrollbarHeight - thumbHeight)) / maxScroll
+	if thumbPos < 0 {
+		thumbPos = 0
+	}
+	if thumbPos > scrollbarHeight-thumbHeight {
+		thumbPos = scrollbarHeight - thumbHeight
+	}
+
+	trackStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
+	thumbStyle := lipgloss.NewStyle().Foreground(primaryColor)
+
+	var sb strings.Builder
+	for i := 0; i < scrollbarHeight; i++ {
+		if i >= thumbPos && i < thumbPos+thumbHeight {
+			sb.WriteString(thumbStyle.Render("┃"))
+		} else {
+			sb.WriteString(trackStyle.Render("│"))
+		}
+		sb.WriteString("\n")
+	}
+
+	return strings.TrimSuffix(sb.String(), "\n")
 }
 
 func (m Model) renderExecutionTimeView() string {
@@ -509,7 +619,7 @@ func (m Model) renderTabs() string {
 }
 
 func (m Model) renderHelp() string {
-	help := "?: help | q: quit | 1/2/3: tabs"
+	help := "?: help | q: quit | 1/2/3: tabs | j/k: scroll"
 	return footerStyle.Render(help)
 }
 
@@ -540,6 +650,9 @@ func (m Model) renderHelpModal() string {
 		{"?", "Toggle this help"},
 		{"q", "Quit"},
 		{"1/2/3", "Switch tabs"},
+		{"j/k", "Scroll down/up"},
+		{"d/u", "Half page down/up"},
+		{"g/G", "Go to top/bottom"},
 		{"s", "Sort by name"},
 		{"S", "Sort by value"},
 	}
